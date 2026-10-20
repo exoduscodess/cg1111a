@@ -44,7 +44,7 @@ constexpr uint16_t IR_SETTLE_MS = 2; // brief says about 1 ms
 constexpr uint16_t SENSOR_INTERVAL_MS = 35;
 // 40 cm is a TEST range, not a supplied maze dimension. Echo round-trip is
 // about 58 us/cm. Adjust to measured maximum useful side-wall distance.
-constexpr uint16_t US_MAX_CM = 40;
+constexpr uint16_t US_MAX_CM = 10;
 constexpr unsigned long US_TIMEOUT_US = US_MAX_CM * 58UL + 300UL;
 constexpr float US_MISSING_MARGIN_CM = 5.0f;
 constexpr float US_CORRECTION_SPAN_CM = 2.0f;
