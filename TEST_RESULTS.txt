@@ -1,0 +1,59 @@
+AMAZEBOT VERIFICATION — 20 OCTOBER 2026
+
+Status: compile-tested and simulation-tested; NOT tested on a physical robot.
+
+Actual Arduino AVR builds (unmodified dependency source):
+  Board target: arduino:avr:uno, ATmega328P
+  Core: Arduino AVR Boards 1.8.8
+  Library: MakeBlock Drive Updated 3.30.0 (reports version 3.30)
+  EEPROM: bundled Arduino library
+
+  Delivered configuration (wiring not confirmed, timing unset): PASS
+    Flash: 11,670 / 32,256 bytes
+    Global/static RAM: 1,016 / 2,048 bytes
+
+  Separate test configuration enabling all race paths: PASS
+    Flash: 16,054 / 32,256 bytes
+    Global/static RAM: 1,186 / 2,048 bytes
+    Nonzero test timings were synthetic values used ONLY to check the build.
+    They are not included as real robot timing values in the delivered Config.h.
+    862 bytes remain for stack/other dynamic use in this build. Static RAM
+    reporting does not measure worst-case runtime stack use.
+
+Host simulations ran the actual Robot.cpp and Logic.h with mocked Arduino I/O
+and synthetic sensor data, using address and undefined-behaviour sanitizers.
+Checks passed for:
+  - recognition of six distinguishable synthetic colour samples;
+  - rejection of incomplete calibration, outliers and ambiguous colours;
+  - red/green/orange turn actions;
+  - pink/blue turn-drive-turn ordering, with no second strip;
+  - white finish with motors stopped and no subsequent movement;
+  - uncertain colour stops rather than guessing a turn;
+  - abort during a timed drive, a double turn and grid travel;
+  - stop text split across idle/busy serial reads;
+  - correct steering-correction signs and no pull towards missing walls;
+  - invalid IR and both-sides-too-close stop conditions;
+  - a high off-baseline in low ambient IR remaining valid;
+  - wrong-sign IR response being rejected;
+  - black-strip rearming only after continuous clear readings;
+  - calibration persistence and corrupt EEPROM rejection;
+  - motor disarming and rejection of invalid pulse durations;
+  - rejection of calibration commands while a race is running.
+
+Not checked on hardware:
+  - actual wiring, electrical correctness or motor polarities;
+  - upload/USB driver compatibility on your computer;
+  - real sensor values, optical settling, ADC noise or ambient-light robustness;
+  - stopping distances, accurate angles, speed or grid travel;
+  - serial communication latency on the actual board;
+  - memory stack high-water mark during an actual race;
+  - collision avoidance and timing score in any physical maze.
+
+Dependency issues encountered (not hidden or patched):
+  - MakeBlockDrive 3.24.0 failed in its own MeSuperVariable.cpp (bool-to-pointer
+    return error) with this compiler.
+  - The downloaded development branch, identifying as 3.31.0, failed in its
+    own MeMegaPi.cpp due to undefined Mega-only analog pins on the Uno target.
+  - Published MakeBlock Drive Updated 3.30.0 passed without source patches.
+Use the tested version in START_HERE.txt, or provide build errors from your
+course-required version so compatibility can be checked explicitly.

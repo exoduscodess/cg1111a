@@ -1,0 +1,342 @@
+AMAZEBOT — FIRST ROBOT TEST PACKAGE
+=================================
+This is a testable first implementation, not a robot-validated race solution.
+All motion timing and colour/IR calibration must come from your assembled mBot.
+Do not treat the default PWM, delay or rejection settings as measured facts.
+
+FIRST SESSION IN FIVE STEPS
+  1. Install the exact library below and open AmazeBot/AmazeBot.ino.
+  2. Verify/edit Config.h wiring; set WIRING_CONFIRMED=true and upload.
+  3. Serial Monitor: 115200 baud, Newline. Send sensors and rgb.
+  4. With wheels lifted, send arm, then pulse 80 0 200 and pulse 0 80 200.
+  5. Send back readings and observed wheel directions. Full race calibration
+     can follow; do not turn on AUTO_START_AFTER_BOOT for these tests.
+
+FILES
+  AmazeBot/AmazeBot.ino : open this in Arduino IDE
+  AmazeBot/Config.h    : wiring, movement timing and other adjustable settings
+  AmazeBot/Robot.cpp   : sensor drivers, calibration, movement and race logic
+  AmazeBot/Logic.h     : colour classification and steering calculations
+  TEST_RESULTS.txt    : what was actually checked, and what remains untested
+Keep all four code files together inside the folder named AmazeBot.
+
+1. INSTALL AND OPEN
+-------------------
+Use Arduino IDE with Arduino AVR Boards. The build was checked with AVR Boards
+1.8.8 and board Arduino Uno (the ATmega328P target used here for mCore).
+If your course provides a separate mCore board profile, use its upload settings;
+I have not seen the course's mBot introduction PDF or your USB connection.
+
+In Arduino IDE's Library Manager, install:
+  MakeBlock Drive Updated, version 3.30.0
+  Maintainer: Nick B / Cegep de Shawinigan
+This is a maintenance fork of the Makeblock library, not a claim that your
+course requires this version. Do not install multiple libraries providing
+MeMCore.h at once: Arduino might select the wrong one.
+
+Why this exact version: the official MakeBlockDrive 3.24 release and the
+repository development version both produced unrelated library build errors in
+my compiler checks. Version 3.30.0 compiled without modifying library source.
+Library: https://github.com/nbourre/Makeblock-Libraries
+Arduino IDE: https://www.arduino.cc/en/software/
+
+Open AmazeBot/AmazeBot.ino. The other files should appear as IDE tabs.
+Open Serial Monitor at 115200 baud; select Newline. Commands are lowercase.
+The default sketch will report status but refuse custom sensor I/O or movement
+until you check the wiring and set WIRING_CONFIRMED=true in Config.h.
+This is intentional: I have not been given your actual circuit wiring.
+
+2. CHECK THE PROPOSED WIRING
+----------------------------
+These are PROPOSED assignments, not observations of your robot. Either wire to
+this arrangement or edit Config.h to match your existing circuit.
+
+  Ultrasonic: RJ25 port 1; mounted on LEFT
+  Line sensor: RJ25 port 2
+  Left motor: M1; forward sign -1
+  Right motor: M2; forward sign +1
+  A0 (port 4 S1): decoder select A, least-significant bit
+  A1 (port 4 S2): decoder select B, most-significant bit
+  A2 (port 3 S1): LDR voltage input
+  A3 (port 3 S2): IR detector voltage input
+  Decoder Y0: IR emitter control through your L293D circuit
+  Decoder Y1: red LED
+  Decoder Y2: green LED
+  Decoder Y3: blue LED
+  Decoder enable G: tied LOW in hardware
+
+Select input AB values are A=bit0 and B=bit1; Y0 is 00, Y1 is 01
+when written as BA, Y2 is 10, and Y3 is 11. Outputs are active LOW.
+Check the actual chip pinout and wiring; Y0..Y3 are output names, not MCU pins.
+
+With the decoder enabled permanently, exactly one emitter is selected. The
+firmware uses RED as the IR-off state; it cannot command all four lights off
+with only two select wires. Colour readings and IR readings run sequentially.
+There is no extra enable wire assumed in this code.
+
+The IR signal processing assumes the brief's detector circuit: reflected IR
+LOWERS the measured voltage. Tell me if your detector is wired differently.
+Verify resistors/current limits in hardware; software cannot fix those.
+
+After checking, change WIRING_CONFIRMED to true and upload again.
+Leave AUTO_START_AFTER_BOOT=false for all initial tests.
+Motors stay stopped until you explicitly send arm and a movement command.
+Send ! to stop an ongoing test or race (also recognized during waiting).
+The word stop also works. Allow for a short bounded sensor read; the finish
+tune checks stop between notes. Physical power-off remains available.
+
+3. FIRST FEEDBACK SESSION — NO MOVEMENT NEEDED
+---------------------------------------------
+Send one command at a time; wait for it to finish before sending the next.
+
+  help       show commands
+  status     readiness flags and current calibration
+  sensors    one set of line/ultrasonic/IR readings
+  stream     repeat sensor readings about four times per second
+  quiet      stop streaming
+  rgb        one RGB illumination/read cycle, without classification
+  dump       display calibration values
+
+Line readings: 0 = both black; 1/2 = one black, one not; 3 = both not black.
+By default, either sensor seeing black triggers a stop. Confirm this with the
+actual strip. Change REQUIRE_BOTH_LINE_SENSORS only if testing justifies it.
+
+us_cm=-1 means no echo within the selected time/range. It is not zero distance.
+US_MAX_CM=40 is a trial useful range, not a maze dimension supplied by the PDFs.
+The timeout is 58 microseconds/cm times the range, plus 300 microseconds margin.
+Mount the ultrasonic sensor inward as the brief advises: distances under about
+3 cm from the transducer are unreliable. Robot-to-wall and sensor-to-wall
+distances differ when the sensor is recessed.
+
+IR fields:
+  ir_off: detector ADC reading while IR emitter is off
+  ir_on: detector ADC reading while IR emitter is on
+  ir_signal: 1000 * (ir_off - ir_on) / ir_off, clamped at zero
+  ir_valid: 0 flags a near-zero baseline, low saturated on-reading or a
+            substantial wrong-sign response
+ir_signal is a proximity proxy, NOT a distance in centimetres. Normalizing by
+the baseline is an initial ambient-compensation approach that needs testing.
+An off reading near 1023 can be normal in low ambient IR; it is not alone
+classified as a fault. Check for a stronger response as a wall gets closer.
+
+To begin feedback, send me:
+  - your Config.h changes / confirmed wiring and left/right sensor placement;
+  - sensors output with no wall, and at several measured wall clearances;
+  - rgb output for each of the five papers and white;
+  - whether the line states match the strip correctly.
+No turn timing is required to gather these readings.
+
+4. COLOUR CALIBRATION
+---------------------
+Mount the sensor and complete the black shielding/chimney/skirt first.
+Use the same sensor height and paper position as in operation. For each sample,
+place it below the LDR and send the corresponding command:
+
+  cal red
+  cal green
+  cal orange
+  cal pink
+  cal blue      use the provided LIGHT BLUE paper
+  cal white     finish paper
+
+Each command collects eight RGB sweeps over roughly 2.4 seconds with the trial
+settling delay. It stores a mean and variability allowance in RAM. Do not move
+the robot while it is sampling. A reading near an ADC rail is rejected because
+it does not provide a useful colour response; inspect brightness/resistors and
+shielding if this happens.
+
+All six classes must be learned before detect returns a colour:
+  detect
+Repeat detect on every paper, after repositioning and in different lab mazes.
+A reading too far from all learned samples, or too similar to two classes,
+returns UNKNOWN. At a waypoint the robot requires two consecutive matching,
+confident results, with at most four reads; otherwise it stops and reports a
+fault. No guessed fallback colour or turn is used.
+
+The classifier uses the three raw ADC readings, scaled by each sample's
+observed variability with a minimum allowance of 12 ADC counts. It does not
+assume that your LDR divider voltage increases or decreases with brightness.
+The distance/ambiguity limits and 100 ms LED settling delay are trial settings.
+Poorly separated colours may need hardware changes or a revised classifier
+based on your measured data; widening thresholds blindly is not a solution.
+
+  save        explicitly persist learned values in EEPROM
+  load        reload saved values (discards unsaved calibration)
+  dump        print all values for feedback
+
+EEPROM values survive reset and normally sketch upload. Increment
+CALIBRATION_TAG in Config.h after changing sensor wiring, resistor values,
+height, shielding, LED mapping or measurement timing, then retrain and save.
+The program checks a checksum and this tag but cannot detect physical changes.
+
+5. SIDE SENSOR CALIBRATION AND WALL CORRECTIONS
+----------------------------------------------
+Keep motors stopped. Use actual maze-wall material.
+
+  cal irnone    IR side facing an opening / no wall in useful range
+  cal irclear   IR side at your chosen comfortable corridor clearance
+  cal irnear    IR side at the close clearance where strong correction is needed
+  cal uscenter  robot centred/straight in corridor, ultrasound facing a wall
+
+Measure and record the physical clearances used. They are not known from the
+PDF. For irnear, choose a useful close clearance before collision; check the
+brief's under-2-cm checkpoint requirement while accounting for sensor mounting.
+Never push a powered moving robot into the wall to obtain this reading.
+
+Each command averages 16 readings. Successful sensor readiness requires:
+  IR near > IR clear + 10, and IR clear > IR none + 5 (signal units)
+  a valid ultrasound centre reading of at least 3 cm
+The margins are trial noise-separation checks, not measured specifications.
+Repeat under changing ambient conditions and report any poor separation.
+Send save once calibration is satisfactory.
+
+Steering uses graded speed corrections away from a side that is too close.
+The ultrasonic correction has a trial 0.5 cm deadband and reaches maximum
+correction after another 2 cm of approach. The IR correction rises between
+its learned clear and near readings. Missing walls exert no steering pull;
+when neither side requires correction, the robot uses its base speed and trims.
+A timeout is treated as an absent ultrasound wall, so this is not a hardware
+failure detector. If BOTH sides request maximum correction, or the IR reading
+is invalid, the robot stops for inspection.
+
+This is a starting wall-correction controller, not a guaranteed stable controller
+for your chassis. Tune speed, trim, correction strength and thresholds using
+real corridor trials. Both sensors actively influence steering during a run.
+
+6. MOTOR DIRECTION AND TIMING TESTS
+-----------------------------------
+Lift the wheels for the FIRST direction tests. With the correct motor supply:
+  arm
+  pulse 80 0 200     physical left wheel forward for 200 ms
+  pulse 0 80 200     physical right wheel forward for 200 ms
+  pulse 80 80 200    both wheels forward
+
+80 is a low trial PWM, not a guaranteed moving speed. If a wheel does not turn,
+check power first and increase gradually if necessary. Positive numbers mean
+physical forward AFTER the configured motor direction signs are applied.
+If the wrong wheel turns, correct the motor port mapping. If direction is
+wrong, change its FORWARD_SIGN. Upload and re-arm after changes.
+
+On a clear floor, test straight travel at the chosen DRIVE_PWM (default 90):
+  pulse 90 90 250
+  forward           uses DRIVE_PWM, trims and FORWARD_TEST_MS
+Tune LEFT_TRIM/RIGHT_TRIM if needed. Pulse values are exact wheel commands;
+pulse deliberately does not add trims, wall correction, or strip detection.
+Every pulse stops at its requested duration; maximum accepted duration is 3000 ms.
+
+Measure turn durations at the chosen TURN_PWM (default 90):
+  pulse -90 90 200   trial left rotation; measure actual angle
+  pulse 90 -90 200   trial right rotation; measure actual angle
+These 200 ms examples DO NOT claim to produce 90 degrees. Repeat and adjust
+until you have reliable left-90, right-90 and 180-degree durations. Enter them
+as LEFT_90_MS, RIGHT_90_MS and UTURN_MS in Config.h. U-turn uses left rotation.
+The named left/right/uturn commands refuse to run while their duration is zero.
+Test at the expected battery charge and on the maze surface.
+
+GRID_TRAVEL_MS must be measured for the travel BETWEEN the turning positions
+in adjacent grids at DRIVE_PWM. It starts at zero and disables grid tests.
+A rough initial measurement can use several forward pulses and measured travel;
+then set the value and check grid, doubleleft and doubleright. These three
+commands require side-sensor calibration and use wall corrections during grid
+travel. They ignore black strips during that explicitly commanded sequence.
+Do these tests in a clear mock route before running them in a real maze.
+
+  arm
+  left
+  right
+  uturn
+  grid
+  doubleleft
+  doubleright
+
+7. POSITIONING AND THE NEW PDF
+------------------------------
+The diagram labels a 21 x 4 cm black strip, a 4 cm gap from its far edge to the
+far grid boundary, a 2.5 cm overlap with the colour paper, and 21 x 27 cm paper.
+It shows entry towards the strip. These labels do NOT establish your wheel-axle
+position when the line detector reaches the strip, or your motor travel time.
+Do not assume a grid is 21 cm merely because the strip is 21 cm wide.
+
+The code stops on the strip and reads the paper WITHOUT an extra forward move.
+Check that the LDR is over colour, not the black strip, when the line sensor
+triggers. Incorrect mounting cannot be fixed by invented timing constants.
+
+After decoding a turn, WAYPOINT_TO_PIVOT_MS can move the robot to its desired
+pivot position: positive moves forward, negative reverses, zero pivots where it
+stopped. The default is zero as an unverified starting choice. Confirm clearance
+from the front wall and correct axle placement, then tune this offset if needed.
+The offset is not applied for WHITE: finish means stay stopped at the strip.
+If your hardware needs different offsets for different turn types, report the
+measurements; this first version currently uses one shared offset.
+
+For pink/blue the sequence is:
+  optional waypoint-to-pivot offset
+  first 90-degree turn
+  timed drive into the adjacent grid (wall corrections active)
+  second 90-degree turn WITHOUT waiting for a strip
+
+Once timing and placement are actually checked, set MOTION_CALIBRATED=true and
+WAYPOINT_GEOMETRY_CONFIRMED=true. These flags are your record of verification;
+they do not perform automatic calibration.
+
+8. RUN THE INTEGRATED PROGRAM
+-----------------------------
+Before a run, status must show raceReady=1. This requires confirmed wiring,
+geometry and motion, all nonzero turn/grid timings, six learned colours and
+four valid side-sensor calibration entries. Save calibration first.
+
+  arm
+  run
+
+The default start delay is five seconds, with motors stopped. Disconnect the
+USB cable if your setup can do so without resetting; do not drag a tether in
+the maze. For untethered power-on starts, only AFTER successful testing, set
+AUTO_START_AFTER_BOOT=true and upload. With valid saved calibration it starts
+after START_DELAY_MS on every reset. Keep this false for ordinary debugging.
+There is no assumed onboard start-button wiring in this version.
+
+During a run:
+  - gently correct against side walls; continue straight at missing walls;
+  - stop immediately when the configured black-strip condition is seen;
+  - confirm the strip after 20 ms, settle, then classify the colour;
+  - red=left, green=right, orange=U-turn, pink=double-left, blue=double-right;
+  - white=stop and play four notes, then remain stopped;
+  - rearm waypoint detection only after both line sensors clear the old strip
+    continuously for LINE_CLEAR_MS, preventing repeated triggers;
+  - an uncertain colour or invalid IR condition stops the robot and prints a
+    fault. There is no automatic restart after a fault.
+
+Send ! to abort. Other commands should wait until the robot has stopped.
+After a fault, diagnose it, reposition as appropriate, then explicitly arm/run.
+A run starts fresh; it does not resume the middle of an interrupted turn.
+Do not recalibrate at the actual demo start; the brief forbids it.
+
+9. WHAT I STILL CANNOT DETERMINE WITHOUT YOUR ROBOT
+--------------------------------------------------
+  - Your actual pin/decoder/motor assignments and sensor-side placement.
+  - Correct PWM, straight-line trims, turn durations and grid travel time.
+  - The required waypoint-to-pivot movement and physical turn clearances.
+  - Real colour signatures, response delays and confusion between papers.
+  - The IR voltage-to-distance relationship, ambient robustness and thresholds.
+  - Performance with your battery, friction, wiring, shielding and maze walls.
+  - Your computer's USB driver/port and the course-specific upload procedure.
+
+All required behaviours have code paths. Those hardware-dependent numbers are
+left configurable or are collected through calibration, rather than fabricated.
+This version uses timed movement because no encoder feedback was specified. It
+cannot guarantee exact distance/angle or recognise a stalled wheel. It also has
+no front-distance sensor: ultrasound and IR are on the sides as required.
+There is no maze mapping or preprogrammed course route.
+
+10. SEND BACK THESE RESULTS AFTER TESTING
+-----------------------------------------
+  1. Compile/upload success, or the full error text and chosen library version.
+  2. Your edited Config.h and a wiring/placement description.
+  3. status and dump output.
+  4. Sensor logs with measured wall clearances and different ambient lighting.
+  5. detect results on all six papers, including any wrong/UNKNOWN results.
+  6. Pulse PWM/duration and resulting angle or measured travel distance.
+  7. What happens at a strip: where the axle and LDR stop, and turning clearance.
+  8. Whether it drifts, oscillates, misses strips or reacts badly to openings.
+
+These results will let us tune the actual robot rather than guess.
